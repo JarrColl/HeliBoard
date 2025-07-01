@@ -1,7 +1,6 @@
 package helium314.keyboard.keyboard
 
 import android.text.InputType
-import android.util.Log
 import android.util.SparseArray
 import android.view.KeyEvent
 import android.view.inputmethod.InputMethodSubtype
@@ -25,7 +24,6 @@ import helium314.keyboard.latin.settings.Settings
 import java.text.BreakIterator
 import java.util.Locale
 import kotlin.math.abs
-import kotlin.math.max
 import kotlin.math.min
 
 const val SURROGATE_PAIR_PAD_LEN = 2 * 6
@@ -185,57 +183,35 @@ class KeyboardActionListenerImpl(private val latinIME: LatinIME, private val inp
     override fun onMoveDeletePointer(steps: Int) {
         inputLogic.finishInput()
         val end = connection.expectedSelectionEnd
-        val actualSteps = actualStepsDelete(steps)
+        val actualSteps = actualSteps(steps)
         val start = connection.expectedSelectionStart + actualSteps
         if (start > end) return
         connection.setSelection(start, end)
     }
 
-    private fun actualStepsMove(steps: Int): Int {
-        var text: CharSequence? = null
-        if (steps > 0) {
-            text = connection.getTextAfterCursor(steps * SURROGATE_PAIR_PAD_LEN, 0)
-//            val text = connection.getTextBeforeCursor(-steps * 4, 0) ?: return false
-        } else {
-//            val text = connection.getTextAfterCursor(steps * 4, 0) ?: return false
-            text = connection.getTextBeforeCursor(-steps * SURROGATE_PAIR_PAD_LEN, 0)
-        }
-        text ?: return steps //todo: do something else?
-
-        val temp = actualSteps(steps, text.toString())
-        return temp
-    }
-
-    private fun actualStepsDelete(steps: Int): Int {
-        var text: CharSequence? = null
-        if (steps > 0) {
-//            val text = connection.getSelectedText(0) ?: return steps
-            text = connection.getSelectedText(0)
-        } else {
-//            val text = connection.getTextBeforeCursor(-steps * 2 * 6, 0) ?: return steps
-            text = connection.getTextBeforeCursor(-steps * SURROGATE_PAIR_PAD_LEN, 0)
-        }
-        text ?: return steps //todo: do something else?
-
-        return actualSteps(steps, text.toString())
-    }
-
-    private fun actualSteps(steps: Int, text: String): Int {
+    private fun actualSteps(steps: Int): Int {
         val it = BreakIterator.getCharacterInstance(Locale.getDefault())
-        var actualSteps = 0
 
         if (steps > 0) {
-            it.setText(text)
-            // BreakIterator returns -1 (BreakIterator.DONE) when reached end.
-            actualSteps = max(it.next(), 0) //TODO: should this be handled another way?
+            val text = if (connection.hasSelection()) {
+                connection.getSelectedText(0)
+            } else {
+                connection.getTextAfterCursor(steps * SURROGATE_PAIR_PAD_LEN, 0)
+            } ?: return 0
+
+            it.setText(text.toString())
+            val nextGraphemeCluster = it.next()
+
+            return if (nextGraphemeCluster == BreakIterator.DONE) 0 else nextGraphemeCluster
         } else {
+            val text = connection.getTextBeforeCursor(-steps * SURROGATE_PAIR_PAD_LEN, 0) ?: return 0
+
             it.setText(text.toString())
             it.last()
-            // BreakIterator returns -1 (BreakIterator.DONE) when reached end.
-            val start = max(it.previous(), 0)
-            actualSteps = start - text.length //TODO: Fix this line, goes back 2
+            val lastGraphemeClusterPos = it.previous()
+
+            return if (lastGraphemeClusterPos == BreakIterator.DONE) 0 else lastGraphemeClusterPos - text.length
         }
-        return actualSteps
     }
 
     override fun onUpWithDeletePointerActive() {
@@ -287,7 +263,7 @@ class KeyboardActionListenerImpl(private val latinIME: LatinIME, private val inp
         if (rawSteps == 0) return false
         // for RTL languages we want to invert pointer movement
         val steps = if (RichInputMethodManager.getInstance().currentSubtype.isRtlSubtype) -rawSteps else rawSteps
-        val moveSteps = actualStepsMove(steps)
+        val moveSteps = actualSteps(steps)
 
         // the shortcut below causes issues due to horrible handling of text fields by Firefox and forks
         // issues:
