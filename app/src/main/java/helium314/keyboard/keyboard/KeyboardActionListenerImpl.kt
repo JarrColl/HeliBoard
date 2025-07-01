@@ -33,6 +33,8 @@ class KeyboardActionListenerImpl(private val latinIME: LatinIME, private val inp
     private val connection = inputLogic.mConnection
     private val emojiAltPhysicalKeyDetector by lazy { EmojiAltPhysicalKeyDetector(latinIME.resources) }
 
+    private val cursorMovementBreakIterator = BreakIterator.getCharacterInstance(Locale.getDefault())
+
     // We expect to have only one decoder in almost all cases, hence the default capacity of 1.
     // If it turns out we need several, it will get grown seamlessly.
     private val hardwareEventDecoders: SparseArray<HardwareEventDecoder> = SparseArray(1)
@@ -190,8 +192,6 @@ class KeyboardActionListenerImpl(private val latinIME: LatinIME, private val inp
     }
 
     private fun actualSteps(steps: Int): Int {
-        val it = BreakIterator.getCharacterInstance(Locale.getDefault())
-
         if (steps > 0) {
             val text = if (connection.hasSelection()) {
                 connection.getSelectedText(0)
@@ -199,16 +199,16 @@ class KeyboardActionListenerImpl(private val latinIME: LatinIME, private val inp
                 connection.getTextAfterCursor(steps * SURROGATE_PAIR_PAD_LEN, 0)
             } ?: return 0
 
-            it.setText(text.toString())
-            val nextGraphemeCluster = it.next()
+            cursorMovementBreakIterator.setText(text.toString())
+            val nextGraphemeCluster = cursorMovementBreakIterator.next()
 
             return if (nextGraphemeCluster == BreakIterator.DONE) 0 else nextGraphemeCluster
         } else {
             val text = connection.getTextBeforeCursor(-steps * SURROGATE_PAIR_PAD_LEN, 0) ?: return 0
 
-            it.setText(text.toString())
-            it.last()
-            val lastGraphemeClusterPos = it.previous()
+            cursorMovementBreakIterator.setText(text.toString())
+            cursorMovementBreakIterator.last()
+            val lastGraphemeClusterPos = cursorMovementBreakIterator.previous()
 
             return if (lastGraphemeClusterPos == BreakIterator.DONE) 0 else lastGraphemeClusterPos - text.length
         }
