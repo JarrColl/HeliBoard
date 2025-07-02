@@ -200,17 +200,29 @@ class KeyboardActionListenerImpl(private val latinIME: LatinIME, private val inp
             } ?: return 0
 
             cursorMovementBreakIterator.setText(text.toString())
-            val nextGraphemeCluster = cursorMovementBreakIterator.next()
 
-            return if (nextGraphemeCluster == BreakIterator.DONE) 0 else nextGraphemeCluster
+            // TODO: TEST HEAVILY the boundaries and edge cases
+            var nextGraphemeCluster = BreakIterator.DONE
+            repeat(steps) {
+                nextGraphemeCluster = cursorMovementBreakIterator.next()
+            }
+
+            // TODO: TEST HEAVILY returning text.lenth vs 0
+            return if (nextGraphemeCluster == BreakIterator.DONE) text.length else nextGraphemeCluster
         } else {
             val text = connection.getTextBeforeCursor(-steps * SURROGATE_PAIR_PAD_LEN, 0) ?: return 0
 
             cursorMovementBreakIterator.setText(text.toString())
             cursorMovementBreakIterator.last()
-            val lastGraphemeClusterPos = cursorMovementBreakIterator.previous()
 
-            return if (lastGraphemeClusterPos == BreakIterator.DONE) 0 else lastGraphemeClusterPos - text.length
+            // TODO: TEST HEAVILY the boundaries and edge cases
+            var lastGraphemeClusterPos = BreakIterator.DONE
+            repeat(-steps) {
+                lastGraphemeClusterPos = cursorMovementBreakIterator.previous()
+            }
+
+            // TODO: TEST HEAVILY returning text.lenth vs 0
+            return if (lastGraphemeClusterPos == BreakIterator.DONE) -text.length else lastGraphemeClusterPos - text.length
         }
     }
 
